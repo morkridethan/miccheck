@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mic Check</title>
+<link rel="manifest" href="manifest.json"><link rel="icon" href="icon.svg"><link rel="apple-touch-icon" href="icon.svg"><meta name="theme-color" content="#3b4cca"><meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+:root{--bg:#f6f5f2;--card:#fff;--tx:#1d1d1f;--mut:#76757a;--bd:#e2e0da;--red:#d93a3a;--grn:#1f9d55;--acc:#3b4cca;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141416;--card:#1f1f23;--tx:#f1f1f3;--mut:#9a9aa2;--bd:#34343a;--red:#e5484d;--grn:#30a46c;--acc:#8b98ff}}
+:root[data-theme="dark"]{--bg:#141416;--card:#1f1f23;--tx:#f1f1f3;--mut:#9a9aa2;--bd:#34343a;--red:#e5484d;--grn:#30a46c;--acc:#8b98ff}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:900px;margin:0 auto;padding:16px}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:14px}
+h1{margin:0;font-size:22px}.sub{color:var(--mut);font-size:13px}
+button{font:inherit;cursor:pointer;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:8px;padding:7px 12px}
+button.pri{background:var(--acc);color:#fff;border-color:var(--acc)}
+input,textarea,select{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:7px 9px;width:100%}
+.row{display:grid;grid-template-columns:auto 1fr;gap:12px;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:10px}
+.chk{width:64px;height:64px;border-radius:50%;border:0;color:#fff;font-weight:700;background:var(--red);font-size:13px}
+.chk.on{background:var(--grn)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.full{grid-column:1/-1}
+label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin-bottom:3px}
+.chars{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chars input{width:auto;flex:1 1 110px;min-width:90px}
+.plus{width:34px;padding:6px;font-weight:700}
+.note{width:100%;text-align:left;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--mut)}
+.del{color:var(--red);padding:4px 8px;font-size:12px;margin-top:6px;border:0;background:none}
+.empty{text-align:center;color:var(--mut);padding:40px 0}
+dialog{border:1px solid var(--bd);border-radius:14px;background:var(--card);color:var(--tx);width:min(520px,94vw);padding:16px}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+.swap{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;margin-bottom:6px}
+@media(max-width:480px){.grid{grid-template-columns:1fr}}
+</style></head><body><div class="wrap">
+<header><div><h1>🎤 Mic Check</h1><div class="sub" id="count"></div></div>
+<div><button id="reset">Reset checks</button> <button class="pri" id="add">+ Add person</button></div></header>
+<div id="list"></div>
+<dialog id="dlg"><h3 id="dt" style="margin-top:0"></h3>
+<label>Notes</label><textarea id="dn" rows="5"></textarea>
+<label style="margin-top:12px">Mic swaps</label><div id="ds"></div>
+<button id="addswap">+ Add swap</button>
+<div style="text-align:right;margin-top:12px"><button class="pri" id="close">Done</button></div></dialog>
+</div>
+<script>
+let people=[];const K="micCheckV1";
+try{people=JSON.parse(localStorage.getItem(K)||"[]")}catch(e){}
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(people))}catch(e){}};
+const $=id=>document.getElementById(id);
+const esc=s=>(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let open=null,delIdx=null;
+function render(){
+ const l=$("list");
+ $("count").textContent=people.filter(p=>p.ok).length+" of "+people.length+" checked";
+ if(!people.length){l.innerHTML='<div class="empty">No one yet. Tap “+ Add person”.</div>';return}
+ l.innerHTML=people.map((p,i)=>`<div class="row" data-i="${i}">
+ <div><button class="chk ${p.ok?"on":""}" data-a="chk">${p.ok?"✓ GOOD":"CHECK"}</button><br><button class="del" data-a="del">${delIdx===i?"Tap again to confirm":"Remove"}</button></div>
+ <div class="grid">
+  <div><label>Real name</label><input data-f="name" value="${esc(p.name)}" placeholder="Actor name"></div>
+  <div><label>Mic #</label><input data-f="mic" value="${esc(p.mic)}" placeholder="e.g. 12"></div>
+  <div class="full"><label>Characters</label><div class="chars">
+   ${p.chars.map((c,j)=>`<input data-c="${j}" value="${esc(c)}" placeholder="Character">`).join("")}
+   <button class="plus" data-a="pc" title="Add character">+</button></div></div>
+  <div class="full"><label>Notes &amp; mic swaps</label>
+   <button class="note" data-a="note">${p.note?esc(p.note):"Tap to add notes…"}${p.swaps.length?" · "+p.swaps.length+" swap"+(p.swaps.length>1?"s":""):""}</button></div>
+ </div></div>`).join("");
+}
+$("list").addEventListener("click",e=>{
+ const b=e.target.closest("[data-a]");if(!b)return;
+ const i=+b.closest(".row").dataset.i,p=people[i],a=b.dataset.a;
+ if(a!="del")delIdx=null;
+ if(a=="chk"){p.ok=!p.ok}
+ else if(a=="pc"){p.chars.push("")}
+ else if(a=="del"){if(delIdx!==i){delIdx=i;render();return}people.splice(i,1);delIdx=null}
+ else if(a=="note"){openDlg(i);return}
+ save();render();
+ if(a=="pc"){const r=document.querySelectorAll(".row")[i].querySelectorAll("[data-c]");r[r.length-1].focus()}
+});
+$("list").addEventListener("input",e=>{
+ const t=e.target,r=t.closest(".row");if(!r)return;const p=people[+r.dataset.i];
+ if(t.dataset.f)p[t.dataset.f]=t.value;
+ else if(t.dataset.c!==undefined)p.chars[+t.dataset.c]=t.value;
+ save();
+});
+$("add").onclick=()=>{people.push({name:"",mic:"",chars:[""],note:"",swaps:[],ok:false});save();render();
+ const r=document.querySelectorAll(".row");r[r.length-1].querySelector("[data-f=name]").focus()};
+$("reset").onclick=()=>{people.forEach(p=>p.ok=false);save();render()};
+function openDlg(i){open=i;const p=people[i];
+ $("dt").textContent=(p.name||"Unnamed")+(p.mic?" — Mic "+p.mic:"");
+ $("dn").value=p.note;drawSwaps();$("dlg").showModal()}
+function drawSwaps(){
+ const p=people[open];
+ const opts=people.map((q,j)=>j==open?"":`<option value="${esc(q.name||("Person "+(j+1)))}">`).join("");
+ $("ds").innerHTML=p.swaps.map((s,j)=>`<div class="swap">
+  <input data-s="${j}" data-k="when" value="${esc(s.when)}" placeholder="When (scene/cue)">
+  <input data-s="${j}" data-k="who" list="pl" value="${esc(s.who)}" placeholder="Swaps with">
+  <button data-x="${j}">✕</button></div>`).join("")+`<datalist id="pl">${opts}</datalist>`;
+}
+$("ds").addEventListener("input",e=>{const t=e.target;if(t.dataset.s===undefined)return;
+ people[open].swaps[+t.dataset.s][t.dataset.k]=t.value;save()});
+$("ds").addEventListener("click",e=>{const b=e.target.closest("[data-x]");if(!b)return;
+ people[open].swaps.splice(+b.dataset.x,1);save();drawSwaps()});
+$("addswap").onclick=()=>{people[open].swaps.push({when:"",who:""});save();drawSwaps()};
+$("dn").oninput=e=>{people[open].note=e.target.value;save()};
+$("close").onclick=()=>$("dlg").close();
+$("dlg").onclose=()=>render();
+people.forEach(p=>{p.chars=p.chars||[""];p.swaps=p.swaps||[]});
+render();
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script></body></html>
