@@ -66,11 +66,12 @@ hr{border:0;border-top:1px solid var(--bd);margin:14px 0}
 
 <dialog id="sdlg"><h3 style="margin:0">Shows</h3>
 <div id="snw"><label>Show name</label><input id="sn"></div>
+<label class="ck" style="margin-top:8px"><input type="checkbox" id="globalCloud" style="width:auto">Put all shows online together</label>
 <label>New show</label><div class="rw"><input id="nn" placeholder="Show name"><button class="pri" id="newshow">Create</button></div>
 <label>Enter your code</label><div class="rw"><input id="cin" placeholder="6-letter code"><button class="pri" id="join">Join</button></div>
 <div class="rw" style="margin-top:10px"><button id="imp" style="flex:1">Import</button><button id="exp" style="flex:1">Export</button></div>
 <button id="pub" hidden style="width:100%;margin-top:8px">☁ Put this show online</button>
-<button id="adv" style="width:100%;margin-top:8px">Advanced settings</button>
+<button id="adv" style="width:100%;margin-top:8px">Advanced permissions &amp; controls</button>
 <div class="sub" id="msg" style="min-height:18px;margin-top:8px"></div>
 <hr><button class="del" id="delshow">Delete this show</button>
 <div class="rt"><button class="pri" id="sclose">Done</button></div></dialog>
@@ -88,15 +89,15 @@ const esc=s=>String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&g
 const mk=()=>({id:uid(),name:"",mic:"",chars:[""],note:"",mine:"",code:"",swaps:[],sets:[],ok:false,col:false});
 const fix=p=>{p.id=p.id||uid();p.chars=p.chars||[];p.swaps=p.swaps||[];p.sets=p.sets||[];["name","mic","note","mine","code"].forEach(k=>p[k]=p[k]||"");p.ok=!!p.ok;p.col=!!p.col;return p};
 let S=null;try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}
-if(!S||!S.shows||!S.shows.length){let old=[];try{old=JSON.parse(localStorage.getItem("micCheckV1")||"[]")}catch(e){}S={shows:[{id:uid(),name:"My Show",people:old}],cur:null}}
+if(!S||!S.shows){let old=[];try{old=JSON.parse(localStorage.getItem("micCheckV1")||"[]")}catch(e){}S={shows:old.length?[{id:uid(),name:"My Show",people:old}]:[],cur:null}}
 S.shows.forEach(s=>{s.id=s.id||uid();s.role=s.role||"owner";s.cloud=!!s.cloud;s.admins=s.admins||[];s.people=(s.people||[]).map(fix)});
-if(!S.shows.some(s=>s.id==S.cur))S.cur=S.shows[0].id;
+if(S.shows.length&&!S.shows.some(s=>s.id==S.cur))S.cur=S.shows[0].id;
 if(S.theme!="dark"&&S.theme!="light")S.theme=matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light";
 const saveLocal=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
 let pt,dirty=false;
 const save=()=>{saveLocal();if(F){dirty=true;clearTimeout(pt);pt=setTimeout(push,500)}};
-const sh=()=>S.shows.find(s=>s.id==S.cur),P=()=>sh().people,OWN=()=>sh().role=="owner",EDIT=()=>OWN()||(sh().role=="admin"&&sh().ed);
-const badge=()=>{const s=sh(),p=s.people[0];return s.role=="owner"?"Admin":s.role=="admin"?"Admin – "+(s.who||"co-admin"):"Actor – "+((p&&p.name)||s.who||"")};
+const sh=()=>S.shows.find(s=>s.id==S.cur),P=()=>sh()?sh().people:[],OWN=()=>sh()&&sh().role=="owner",EDIT=()=>sh()&&(OWN()||(sh().role=="admin"&&sh().ed));
+const badge=()=>{const s=sh();if(!s)return"No Show";const p=s.people[0];return s.role=="owner"?"Admin":s.role=="admin"?"Admin – "+(s.who||"co-admin"):"Actor – "+((p&&p.name)||s.who||"")};
 function theme(){document.documentElement.dataset.theme=S.theme;$("theme").textContent=S.theme=="dark"?"🌙":"☀️"}
 function dev(){document.documentElement.dataset.device=mobile?"mobile":"desktop"}
 $("theme").onclick=()=>{S.theme=S.theme=="dark"?"light":"dark";theme();save()};
@@ -121,17 +122,29 @@ function aview(p){if(!p)return'<div class="empty">Loading… (needs signal the f
  <label>Set changes</label>${p.sets.filter(x=>x.name||x.note).map(x=>`<div><b>${esc(x.name)}</b><div class="sub">${esc(x.note)}</div></div>`).join("")||none}
  <label>My notes</label><textarea rows="5" data-mine placeholder="Only you and the admins can see these">${esc(p.mine)}</textarea></div>`}
 function render(){
- const s=sh(),ps=s.people,act=s.role=="actor",ed=EDIT();
+ const s=sh();
+ if(!s){
+  document.title="Mic Check – No Show";
+  $("count.innerHTML")\vert{}\vert{}($("count").innerHTML=`<b class="badge">No Show</b>`);
+  $("add").hidden=$("reset").hidden=$("colAll").hidden=$("codes").hidden=true;
+  $("list").innerHTML=`<div class="empty">You don't have any shows right now.<br><br><button class="pri" id="noShowAdd">+ Create a Show</button> or <button class="pri" id="noShowJoin">Join a Show</button></div>`;
+  $("showSel").innerHTML=`<option value="">No show</option>`;
+  return;
+ }
+ const ps=s.people,act=s.role=="actor",ed=EDIT();
  document.title="Mic Check – "+(s.name||"Untitled");
  const net=!s.cloud?"💾 Local":navigator.onLine?"☁ Online":"📴 Offline";
  $("count").innerHTML=`<b class="badge">${esc(badge())}</b> ${act?"":ps.filter(p=>p.ok).length+"/"+ps.length+" checked · "}${net} · ${mobile?"📱":"🖥"}`;
- $("add").hidden=!ed;$("reset").hidden=act;$("colAll").hidden=act||mobile;$("codes").hidden=!OWN();
+ $("add").hidden=!ed;$("reset").hidden=act;$("colAll").hidden=act\vert{}\vert{}mobile;$("codes").hidden=!OWN();
  $("colAll").textContent=ps.length&&ps.every(p=>p.col)?"Expand all":"Collapse all";
  $("list").innerHTML=act?aview(ps[0]):ps.length?ps.map(p=>mobile||p.col?tcard(p):xcard(p)).join(""):'<div class="empty">No one yet. Tap “+ Add”.</div>';
  $("showSel").innerHTML=S.shows.map(x=>`<option value="${x.id}"${x.id==S.cur?" selected":""}>${esc(x.name)||"Untitled"}</option>`).join("");
 }
 $("list").addEventListener("click",e=>{
  const b=e.target.closest("[data-a]");if(!b)return;
+ if(b.id=="noShowAdd"){$("shows").click();return;}
+ if(b.id=="noShowJoin"){$("shows").click();$("cin").focus();return;}
+ const s=sh();if(!s)return;
  const p=P().find(x=>x.id==b.closest(".card").dataset.id),a=b.dataset.a;
  if(a!="del")delId=null;
  if(a=="chk")p.ok=!p.ok;
@@ -144,7 +157,7 @@ $("list").addEventListener("click",e=>{
  if(a=="pc"){const r=$("list").querySelector(`[data-id="${p.id}"]`).querySelectorAll("[data-c]");r[r.length-1].focus()}
 });
 $("list").addEventListener("input",e=>{const t=e.target,c=t.closest(".card");if(!c)return;const p=P().find(x=>x.id==c.dataset.id);
- if(t.dataset.f)p[t.dataset.f]=t.value;else if(t.dataset.c!==undefined)p.chars[+t.dataset.c]=t.value;else if(t.dataset.mine!==undefined)p.mine=t.value;save()});
+ if(!p)return;if(t.dataset.f)p[t.dataset.f]=t.value;else if(t.dataset.c!==undefined)p.chars[+t.dataset.c]=t.value;else if(t.dataset.mine!==undefined)p.mine=t.value;save()});
 let dg=null,ov=null;
 $("list").addEventListener("pointerdown",e=>{
  const g=e.target.closest("[data-grip]");if(!g)return;e.preventDefault();
@@ -157,7 +170,7 @@ $("list").addEventListener("pointerdown",e=>{
   const ps=P(),a=ps.findIndex(p=>p.id==dg.dataset.id);
   if(ov){const b=ps.findIndex(p=>p.id==ov.dataset.id),[x]=ps.splice(a,1);ps.splice(b,0,x);save()}
   dg=ov=null;render()}});
-$("add").onclick=()=>{const p=mk();P().push(p);save();render();
+$("add").onclick=()=>{const s=sh();if(!s)return;const p=mk();P().push(p);save();render();
  const c=$("list").querySelector(`[data-id="${p.id}"]`);if(!c)return openDlg(p);c.scrollIntoView({block:"center"});const f=c.querySelector("[data-f=name]");f&&f.focus()};
 $("reset").onclick=()=>{P().forEach(p=>p.ok=false);save();render()};
 $("colAll").onclick=()=>{const t=!P().every(p=>p.col);P().forEach(p=>p.col=t);save();render()};
@@ -234,46 +247,79 @@ let mt,dsc=false;const say=t=>{["msg","pm"].forEach(i=>{const e=$(i);if(e)e.text
 function copy(ta){ta.focus();ta.select();let ok=false;try{ok=document.execCommand("copy")}catch(e){}
  if(ok)say("Copied!");else if(navigator.clipboard)navigator.clipboard.writeText(ta.value).then(()=>say("Copied!")).catch(()=>say("Select the text and copy it"));else say("Select the text and copy it")}
 const bk='<button data-p="go" data-v="adv">‹ Back</button>';
-const row=(id,label,code)=>`<div class="g2"><div><b>${label}</b><input id="${id}" readonly value="${esc(code)}"></div><button data-p="cpy" data-t="${id}">Copy</button></div>`;
 const ago=t=>{const m=Math.round((Date.now()-t)/60000);return m<60?m+" min ago":m<1440?Math.round(m/60)+" h ago":Math.round(m/1440)+" d ago"};
-const needOnline=`<div class="sub" style="margin-top:8px">Put this show online first (Shows → ☁ Put this show online) and make sure you have signal.</div>`;
+const needOnline=`<div class="sub" style="margin-top:8px">Put this show online first and make sure you have signal.</div>`;
 const V={
  imp:()=>`<h3 style="margin:0">Import</h3><label>Paste a backup</label><textarea id="ti" rows="4"></textarea><div class="rw" style="margin-top:6px"><input type="file" id="fi" accept=".json,.txt"><button class="pri" data-p="doimp">Import</button></div>`,
  exp:()=>`<h3 style="margin:0">Export</h3><label>Backup of your shows</label><textarea id="te" rows="5" readonly>${esc(JSON.stringify({mic:1,shows:S.shows.filter(s=>s.role=="owner")}))}</textarea><div class="rw" style="margin-top:6px"><button data-p="cpy" data-t="te">Copy</button><button data-p="dl">Download file</button></div>`,
- adv:()=>`<h3 style="margin:0">Advanced settings</h3><div class="mn"><button data-p="go" data-v="who">👥 Who's using it</button><button data-p="go" data-v="adm">🛡 Admin code</button><button data-p="go" data-v="act">🎭 Actor codes</button></div>`,
- who:async()=>{const s=sh(),seen={};
+ adv:async()=>{const s=sh();if(!s)return`<h3 style="margin:0">Permissions</h3>${bk}<div class="sub">No show selected.</div>`;
+  return `<h3 style="margin:0">Permissions &amp; Controls</h3>${bk}<div class="mn"><button data-p="go" data-v="who">👥 Who's using it &amp; permissions</button><button data-p="go" data-v="adm">🛡 Co-Admin codes</button><button data-p="go" data-v="act">🎭 Actor codes</button></div>`},
+ who:async()=>{const s=sh();if(!s)return`<h3 style="margin:0">Who's using it</h3>${bk}`;
+  const seen={};
   if(F)await Promise.all([...s.admins.map(a=>a.code),...s.people.map(p=>p.code)].filter(Boolean).map(async c=>{try{seen[c]=(await F.getDoc(F.doc(db,"codes",c))).data().seen||0}catch(e){}}));
   const st=c=>!c?"":" · "+c+(!seen[c]?" · not joined yet":Date.now()-seen[c]<240000?' · <b style="color:var(--grn)">online now</b>':" · last seen "+ago(seen[c]));
-  return `<h3 style="margin:0">Who's using it</h3>${bk}<div class="mn"><div><span class="badge">Admin</span> you (made it)</div>${s.admins.map(a=>`<div><span class="badge">Admin – ${esc(a.name)}</span> <span class="sub">${a.ed?"can edit":"limited"}${st(a.code)}</span></div>`).join("")}${s.people.filter(p=>p.name).map(p=>`<div><span class="badge">Actor – ${esc(p.name)}</span> <span class="sub">${p.code?st(p.code).slice(3):"no code yet"}</span></div>`).join("")}</div>`},
- adm:()=>`<h3 style="margin:0">Admin code</h3>${bk}<label>Their name</label><input id="an" placeholder="e.g. Sam"><label class="ck"><input type="checkbox" id="ae" style="width:auto">Can add / edit actors (off = only check mics &amp; write notes)</label><button class="pri" data-p="mkadm" style="margin-top:8px">Make code</button><div class="mn" id="ar"></div>`,
- act:async()=>{const s=sh();if(!s.cloud||!F)return `<h3 style="margin:0">Actor codes</h3>${bk}${needOnline}`;
+  return `<h3 style="margin:0">Who's using it &amp; Permissions</h3>${bk}<div class="sub" style="margin-bottom:6px">Manage permissions, view what they can access, or remove users.</div><div class="mn">
+  <div><span class="badge">Owner</span> You (Full control)</div>
+  ${s.admins.map((a,i)=>`<div style="display:flex;gap:6px;align-items:center;background:var(--bg);border:1px solid var(--bd);padding:6px;border-radius:8px">
+    <div style="flex:1"><span class="badge">Admin – ${esc(a.name)}</span> <span class="sub">${a.ed?"can add/edit actors":"limited view"}</span>${st(a.code)}</div>
+    <button class="ed" data-p="togadm" data-i="${i}">${a.ed?"Make Limited":"Make Editor"}</button>
+    <button class="del" data-p="deladm" data-i="${i}">Remove</button>
+  </div>`).join("")}
+  ${s.people.map((p,i)=>`<div style="display:flex;gap:6px;align-items:center;background:var(--bg);border:1px solid var(--bd);padding:6px;border-radius:8px">
+    <div style="flex:1"><span class="badge">Actor – ${esc(p.name||"Unnamed")}</span> <span class="sub">Can view own mic/notes${st(p.code)}</span></div>
+    <button class="del" data-p="delact" data-i="${i}">Remove</button>
+  </div>`).join("")}</div>
+  <div class="rw" style="margin-top:10px"><input id="newPName" placeholder="New actor/crew name"><button class="pri" data-p="addpers">Add Person</button></div>`},
+ adm:()=>`<h3 style="margin:0">Co-Admin Code</h3>${bk}<label>Their name</label><input id="an" placeholder="e.g. Sam"><label class="ck"><input type="checkbox" id="ae" style="width:auto">Can add / edit actors (off = only check mics &amp; write notes)</label><button class="pri" data-p="mkadm" style="margin-top:8px">Make code</button><div class="mn" id="ar"></div>`,
+ act:async()=>{const s=sh();if(!s||!s.cloud||!F)return `<h3 style="margin:0">Actor Codes</h3>${bk}${needOnline}`;
   const ps=s.people.filter(p=>p.name);
-  try{for(const p of ps)if(!p.code)p.code=await mkCode({show:s.id,role:"actor",me:p.id,who:p.name});save()}catch(e){return `<h3 style="margin:0">Actor codes</h3>${bk}<div class="sub">Couldn't make codes — check your signal and try again.</div>`}
-  return `<h3 style="margin:0">Actor codes</h3>${bk}<div class="sub">Each code opens only that actor's own info.</div><div class="mn">${ps.map((p,i)=>row("ac"+i,"Actor – "+esc(p.name),p.code)).join("")||"Add actors with names first."}</div>${ps.length?`<label>All codes</label><textarea id="all" rows="4" readonly>${esc(ps.map(p=>p.name+": "+p.code).join("\n"))}</textarea><button class="pri" data-p="cpy" data-t="all" style="margin-top:6px">Copy all</button>`:""}`}
+  try{for(const p of ps)if(!p.code)p.code=await mkCode({show:s.id,role:"actor",me:p.id,who:p.name});save()}catch(e){return `<h3 style="margin:0">Actor Codes</h3>${bk}<div class="sub">Couldn't make codes — check your signal.</div>`}
+  return `<h3 style="margin:0">Actor Codes</h3>${bk}<div class="sub">Each code opens only that actor's own info.</div><div class="mn">${ps.map((p,i)=>`<div class="g2"><div><b>Actor – ${esc(p.name)}</b><input id="ac${i}" readonly value="${esc(p.code)}"></div><button data-p="cpy" data-t="ac${i}">Copy</button></div>`).join("")||"Add actors with names first."}</div>${ps.length?`<label>All codes</label><textarea id="all" rows="4" readonly>${esc(ps.map(p=>p.name+": "+p.code).join("\n"))}</textarea><button class="pri" data-p="cpy" data-t="all" style="margin-top:6px">Copy all</button>`:""}`}
 };
-async function go(v){$("pb").innerHTML=await V[v]()+'<div class="sub" id="pm" style="min-height:18px;margin-top:8px"></div><div class="rt"><button class="pri" data-p="x">Close</button></div>';if(!$("pop").open)$("pop").showModal()}
+async function go(v){const content=typeof V[v]==="function"?await V[v]():V[v];$("pb").innerHTML=content+'<div class="sub" id="pm" style="min-height:18px;margin-top:8px"></div><div class="rt"><button class="pri" data-p="x">Close</button></div>';if(!$("pop").open)$("pop").showModal()}
 $("pb").addEventListener("click",async e=>{const b=e.target.closest("[data-p]");if(!b)return;const a=b.dataset.p;
  if(a=="go")go(b.dataset.v);else if(a=="x")$("pop").close();else if(a=="cpy")copy($(b.dataset.t));
- else if(a=="mkadm"){const n=$("an").value.trim()||"Admin 2",ed=$("ae").checked,s=sh();if(!s.cloud||!F)return say("Put the show online first");
-  try{const c=await mkCode({show:s.id,role:"admin",who:n,ed});s.admins.push({name:n,ed,code:c});save();$("ar").insertAdjacentHTML("beforeend",row("ax"+s.admins.length,"Admin – "+esc(n),c))}catch(x){say("Couldn't make a code — check your signal")}}
+ else if(a=="mkadm"){const n=$("an").value.trim()\vert{}\vert{}"Admin 2",ed=$("ae").checked,s=sh();if(!s||!s.cloud||!F)return say("Put the show online first");
+  try{const c=await mkCode({show:s.id,role:"admin",who:n,ed});s.admins.push({name:n,ed,code:c});save();$("ar").insertAdjacentHTML("beforeend",`<div class="g2"><div><b>Admin – ${esc(n)}</b><input readonly value="${esc(c)}"></div></div>`)
+  }catch(x){say("Couldn't make a code — check your signal")}}
+ else if(a=="togadm"){const s=sh(),i=+b.dataset.i;if(s&&s.admins[i]){s.admins[i].ed=!s.admins[i].ed;save();go("who")}}
+ else if(a=="deladm"){const s=sh(),i=+b.dataset.i;if(s&&s.admins[i]){s.admins.splice(i,1);save();go("who")}}
+ else if(a=="delact"){const s=sh(),i=+b.dataset.i;if(s&&s.people[i]){s.people.splice(i,1);save();go("who");render()}}
+ else if(a=="addpers"){const name=$("newPName").value.trim(),s=sh();if(!name||!s)return say("Enter a name");const p=mk();p.name=name;s.people.push(p);save();go("who");render()}
  else if(a=="dl"){const l=document.createElement("a");l.href=URL.createObjectURL(new Blob([$("te").value],{type:"application/json"}));l.download="mic-check-backup.json";l.click()}
  else if(a=="doimp"){const t=$("ti").value.trim();if(!t)return say("Paste a backup first");
   try{const add=(JSON.parse(t).shows||[]).map(s=>({...s,role:"owner",cloud:false,id:uid(),admins:[],people:(s.people||[]).map(p=>fix({...p,id:uid()}))}));
    if(!add.length)throw 0;S.shows.push(...add);S.cur=add[0].id;saveLocal();render();$("pop").close();$("sdlg").close()}catch(x){say("That backup didn't work")}}});
 $("pb").addEventListener("change",e=>{if(e.target.id!="fi")return;const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$("ti").value=r.result;say("File loaded — tap Import")};r.readAsText(f)});
-$("shows").onclick=()=>{dsc=false;const o=OWN();$("sn").value=sh().name;$("snw").hidden=!o;$("adv").hidden=!o;$("pub").hidden=!(o&&!sh().cloud);$("cin").value="";$("delshow").textContent=o?"Delete this show":"Remove this show";$("sdlg").showModal()};
-$("sn").oninput=e=>{sh().name=e.target.value;save();render()};
-$("newshow").onclick=()=>{const s={id:uid(),name:$("nn").value.trim()||"New show",role:"owner",cloud:false,admins:[],people:[]};S.shows.push(s);S.cur=s.id;$("nn").value="";if(F)goOnline(s);saveLocal();render();$("sdlg").close()};
-$("pub").onclick=()=>{if(!F)return say("Online features aren't available right now");goOnline(sh());$("pub").hidden=true;render();say("This show is now online")};
+$("shows").onclick=()=>{
+ dsc=false;const s=sh(),o=!s||OWN();
+ $("sn").value=s?s.name:"";
+ $("snw").hidden=!s;
+ $("globalCloud").checked=S.shows.length&&S.shows.every(x=>x.cloud);
+ $("adv").hidden=!s||!o;
+ $("pub").hidden=!s||!o||s.cloud;
+ $("cin").value="";
+ $("delshow").textContent=s?(o?"Delete this show":"Remove this show"):"Delete show";
+ $("delshow").hidden=!s;
+ $("sdlg").showModal();
+};
+$("sn").oninput=e=>{const s=sh();if(s){s.name=e.target.value;save();render()}};
+$("globalCloud").onchange=e=>{
+ const val=e.target.checked;
+ S.shows.forEach(s=>{s.cloud=val;if(val&&!ready[s.id])goOnline(s);});
+ save();render();say(val?"All shows are online":"Cloud sync disabled for shows");
+};
+$("newshow").onclick=()=>{const s={id:uid(),name:$("nn").value.trim()||"New show",role:"owner",cloud:$("globalCloud").checked,admins:[],people:[]};S.shows.push(s);S.cur=s.id;$("nn").value="";if(F&&s.cloud)goOnline(s);saveLocal();render();$("sdlg").close()};
+$("pub").onclick=()=>{const s=sh();if(!s)return;if(!F)return say("Online features aren't available right now");goOnline(s);$("pub").hidden=true;render();say("This show is now online")};
 $("join").onclick=async()=>{const t=$("cin").value.trim();if(!t)return say("Enter your code first");if(!F)return say("You need signal to join");
  try{await joinCode(t);$("sdlg").close()}catch(x){say(x=="own"?"That's already your show":x=="nf"||x=="ns"?"That code wasn't found":"Couldn't connect — check your signal")}};
 $("imp").onclick=()=>go("imp");$("exp").onclick=()=>go("exp");$("adv").onclick=()=>go("adv");$("codes").onclick=()=>go("act");
 $("delshow").onclick=()=>{
- if(S.shows.length<2)return say("You need at least one show");
+ const s=sh();if(!s)return;
  if(!dsc){dsc=true;$("delshow").textContent="Tap again to confirm";return}
- const s=sh();if(unsubs[s.id]){unsubs[s.id]();delete unsubs[s.id]}
+ if(unsubs[s.id]){unsubs[s.id]();delete unsubs[s.id]}
  if(F&&s.cloud&&s.role=="owner"){s.people.forEach(p=>F.deleteDoc(pdoc(s.id,p.id)).catch(()=>{}));F.deleteDoc(sdoc(s.id)).catch(()=>{})}
- S.shows=S.shows.filter(x=>x!=s);S.cur=S.shows[0].id;dsc=false;saveLocal();render();$("sdlg").close()};
+ S.shows=S.shows.filter(x=>x!=s);S.cur=S.shows.length?S.shows[0].id:null;dsc=false;saveLocal();render();$("sdlg").close()};
 $("sclose").onclick=()=>$("sdlg").close();
 theme();dev();render();
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
